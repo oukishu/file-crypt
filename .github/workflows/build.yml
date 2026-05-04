@@ -48,21 +48,29 @@ jobs:
             arch: "386"
             platform: WINDOWS
 
-    if: |
-      github.event.inputs.platform == 'ALL' || 
-      github.event.inputs.platform == matrix.platform
-
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
+      # This step checks if the current matrix row matches the user selection
+      - name: Should Run Check
+        id: check
+        run: |
+          if [[ "${{ github.event.inputs.platform }}" == "ALL" || "${{ github.event.inputs.platform }}" == "${{ matrix.platform }}" ]]; then
+            echo "run=true" >> $GITHUB_OUTPUT
+          else
+            echo "run=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Set up Go
+        if: steps.check.outputs.run == 'true'
         uses: actions/setup-go@v5
         with:
           go-version: '1.21'
           cache: true
 
       - name: Build Binary
+        if: steps.check.outputs.run == 'true'
         run: |
           if [ ! -f go.mod ]; then
             go mod init file-crypt
@@ -74,12 +82,11 @@ jobs:
           if [ "${{ matrix.os }}" = "windows" ]; then EXT=".exe"; fi
           OUTPUT_NAME="file-crypt-${{ matrix.os }}-${{ matrix.arch }}${EXT}"
           
-          echo "Building $OUTPUT_NAME..."
-          
           CGO_ENABLED=0 GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} \
           go build -ldflags="-s -w" -o $OUTPUT_NAME main.go
 
       - name: Upload Artifact
+        if: steps.check.outputs.run == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: file-crypt-${{ matrix.os }}-${{ matrix.arch }}
