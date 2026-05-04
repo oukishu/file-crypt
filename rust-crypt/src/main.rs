@@ -34,8 +34,8 @@ struct Cli {
 
 fn derive_key(password: &str, salt: &[u8]) -> [u8; 32] {
     let mut key = [0u8; 32];
-    // Use Hmac<Sha256> to satisfy KeyInit trait requirements
-    pbkdf2::<Hmac<Sha256>>(password.as_bytes(), salt, 100_000, &mut key);
+    pbkdf2::<Hmac<Sha256>>(password.as_bytes(), salt, 100_000, &mut key)
+        .expect("PBKDF2 derivation failed");
     key
 }
 
