@@ -3,57 +3,84 @@ name: Build and Release
 on:
   workflow_dispatch:
     inputs:
-      project:
-        description: 'Select project to build'
+      platform:
+        description: 'Select Target Platform'
         required: true
-        default: 'both'
+        default: 'ALL'
         type: choice
         options:
-          - go-crypt
-          - rust-crypt
-          - both
+          - ALL
+          - LINUX
+          - MACOS
+          - WINDOWS
+      version:
+        description: 'Build Version'
+        required: true
+        default: 'v1.0.0'
 
 jobs:
-  build-go:
-    name: Build Go Crypt
-    if: ${{ github.event.inputs.project == 'go-crypt' || github.event.inputs.project == 'both' }}
+  build:
+    name: Build ${{ matrix.os }}-${{ matrix.arch }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux
+          - os: linux
+            arch: amd64
+            platform: LINUX
+          - os: linux
+            arch: arm64
+            platform: LINUX
+          # macOS
+          - os: darwin
+            arch: amd64
+            platform: MACOS
+          - os: darwin
+            arch: arm64
+            platform: MACOS
+          # Windows
+          - os: windows
+            arch: amd64
+            platform: WINDOWS
+          - os: windows
+            arch: "386"
+            platform: WINDOWS
+
+    if: |
+      github.event.inputs.platform == 'ALL' || 
+      github.event.inputs.platform == matrix.platform
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
           go-version: '1.21'
-          cache-dependency-path: go-crypt/go.sum
-      - name: Build
+          cache: true
+
+      - name: Build Binary
         run: |
-          cd go-crypt
-          if [ ! -f go.mod ]; then go mod init go-crypt; fi
+          if [ ! -f go.mod ]; then
+            go mod init file-crypt
+            go get golang.org/x/crypto/pbkdf2
+          fi
           go mod tidy
-          CGO_ENABLED=0 go build -ldflags="-s -w" -o go-crypt-linux-amd64 main.go
-      - uses: actions/upload-artifact@v4
-        with:
-          name: go-crypt-linux-amd64
-          path: go-crypt/go-crypt-linux-amd64
+          
+          EXT=""
+          if [ "${{ matrix.os }}" = "windows" ]; then EXT=".exe"; fi
+          OUTPUT_NAME="file-crypt-${{ matrix.os }}-${{ matrix.arch }}${EXT}"
+          
+          echo "Building $OUTPUT_NAME..."
+          
+          CGO_ENABLED=0 GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} \
+          go build -ldflags="-s -w" -o $OUTPUT_NAME main.go
 
-  build-rust:
-    name: Build Rust Crypt
-    if: ${{ github.event.inputs.project == 'rust-crypt' || github.event.inputs.project == 'both' }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
         with:
-          workspaces: rust-crypt -> target
-      
-      - name: Build
-        # Running cargo directly inside the project directory
-        working-directory: ./rust-crypt
-        run: |
-          cargo build --release
-          cp target/release/rust-crypt ../rust-crypt-linux-amd64
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: rust-crypt-linux-amd64
-          path: rust-crypt-linux-amd64
+          name: file-crypt-${{ matrix.os }}-${{ matrix.arch }}
+          path: file-crypt-${{ matrix.os }}-${{ matrix.arch }}*

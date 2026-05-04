@@ -90,7 +90,6 @@ func decryptFile(src, dst, password string) error {
 	copy(fullNonce[:8], masterNonce)
 	var counter uint32
 
-	// 块大小 = 数据 + Tag
 	buf := make([]byte, chunkSize+tagSize)
 	for {
 		n, err := fIn.Read(buf)
