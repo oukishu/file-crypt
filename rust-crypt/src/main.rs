@@ -3,21 +3,32 @@ use clap::Parser;
 use pbkdf2::pbkdf2;
 use sha2::Sha256;
 use std::fs::{self, File};
-use std::io::{Read, Write, BufReader, BufWriter};
+use std::io::{Read, Write, BufReader, BufWriter, Error, ErrorKind};
 use std::path::{Path, PathBuf};
-use walkdir::WalkDir;
 
-const CHUNK_SIZE: usize = 64 * 1024;
+const CHUNK_SIZE: usize = 64 * 1024; // 64KB
 const TAG_SIZE: usize = 16;
 const SALT_SIZE: usize = 16;
 const MASTER_NONCE_SIZE: usize = 8;
 
 #[derive(Parser)]
+#[command(author, version, about = "High-performance file encryption tool")]
 struct Cli {
-    #[arg(short, long)] mode: String, // enc or dec
-    #[arg(short, long)] password: String,
-    #[arg(short, long)] input: PathBuf,
-    #[arg(short, long)] output: PathBuf,
+    /// Operation mode: enc or dec
+    #[arg(short, long)]
+    mode: String,
+
+    /// Password for key derivation
+    #[arg(short, long)]
+    password: String,
+
+    /// Input file path
+    #[arg(short, long)]
+    input: PathBuf,
+
+    /// Output directory
+    #[arg(short, long)]
+    output: PathBuf,
 }
 
 fn derive_key(password: &str, salt: &[u8]) -> [u8; 32] {
@@ -26,7 +37,7 @@ fn derive_key(password: &str, salt: &[u8]) -> [u8; 32] {
     key
 }
 
-fn encrypt_action(src: &Path, dst: &Path, password: &str) -> anyhow::Result<()> {
+fn encrypt_file(src: &Path, dst: &Path, password: &str) -> anyhow::Result<()> {
     let mut salt = [0u8; SALT_SIZE];
     let mut master_nonce = [0u8; MASTER_NONCE_SIZE];
     getrandom::getrandom(&mut salt)?;
@@ -38,6 +49,7 @@ fn encrypt_action(src: &Path, dst: &Path, password: &str) -> anyhow::Result<()> 
     let mut f_in = BufReader::new(File::open(src)?);
     let mut f_out = BufWriter::new(File::create(dst)?);
 
+    // Write Header
     f_out.write_all(&salt)?;
     f_out.write_all(&master_nonce)?;
 
@@ -48,19 +60,24 @@ fn encrypt_action(src: &Path, dst: &Path, password: &str) -> anyhow::Result<()> 
 
     while let Ok(n) = f_in.read(&mut buffer) {
         if n == 0 { break; }
+        // Update Counter in Nonce (Big Endian)
         nonce_buf[8..].copy_from_slice(&counter.to_be_bytes());
+        
         let ciphertext = cipher.encrypt(Nonce::from_slice(&nonce_buf), &buffer[..n])
-            .map_err(|_| anyhow::anyhow!("Encryption failed"))?;
+            .map_err(|_| Error::new(ErrorKind::Other, "AES encryption failed"))?;
+        
         f_out.write_all(&ciphertext)?;
         counter += 1;
     }
+    f_out.flush()?;
     Ok(())
 }
 
-fn decrypt_action(src: &Path, dst: &Path, password: &str) -> anyhow::Result<()> {
+fn decrypt_file(src: &Path, dst: &Path, password: &str) -> anyhow::Result<()> {
     let mut f_in = BufReader::new(File::open(src)?);
     let mut salt = [0u8; SALT_SIZE];
     let mut master_nonce = [0u8; MASTER_NONCE_SIZE];
+    
     f_in.read_exact(&mut salt)?;
     f_in.read_exact(&mut master_nonce)?;
 
@@ -68,39 +85,51 @@ fn decrypt_action(src: &Path, dst: &Path, password: &str) -> anyhow::Result<()> 
     let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&key));
     let mut f_out = BufWriter::new(File::create(dst)?);
 
+    // Buffer needs to hold Chunk + Tag
     let mut buffer = vec![0u8; CHUNK_SIZE + TAG_SIZE];
     let mut counter: u32 = 0;
     let mut nonce_buf = [0u8; 12];
     nonce_buf[..8].copy_from_slice(&master_nonce);
 
-    while let Ok(n) = f_in.read(&mut buffer) {
+    loop {
+        let n = f_in.read(&mut buffer)?;
         if n == 0 { break; }
+        
         nonce_buf[8..].copy_from_slice(&counter.to_be_bytes());
         let plaintext = cipher.decrypt(Nonce::from_slice(&nonce_buf), &buffer[..n])
-            .map_err(|_| anyhow::anyhow!("Auth failed at chunk {}", counter))?;
+            .map_err(|_| Error::new(ErrorKind::InvalidData, "Integrity check failed (wrong password or corrupt data)"))?;
+        
         f_out.write_all(&plaintext)?;
         counter += 1;
     }
+    f_out.flush()?;
     Ok(())
 }
 
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
-    for entry in WalkDir::new(&cli.input).into_iter().filter_map(|e| e.ok()) {
-        if entry.file_type().is_file() {
-            let rel = entry.path().strip_prefix(&cli.input)?;
-            let mut out_path = cli.output.join(rel);
-            fs::create_dir_all(out_path.parent().unwrap())?;
+    
+    // Ensure output directory exists
+    fs::create_dir_all(&cli.output)?;
 
-            if cli.mode == "enc" {
-                out_path.set_extension(format!("{}.enc", out_path.extension().unwrap_or_default().to_str().unwrap()));
-                encrypt_action(entry.path(), &out_path, &cli.password)?;
-            } else {
-                let mut p = out_path.clone();
-                p.set_extension(""); // 简单处理后缀
-                decrypt_action(entry.path(), &p, &cli.password)?;
-            }
-        }
+    let file_name = cli.input.file_name()
+        .ok_or_else(|| anyhow::anyhow!("Invalid input file name"))?;
+
+    if cli.mode == "enc" {
+        let mut target_path = cli.output.join(file_name);
+        // Add .enc extension
+        let ext = target_path.extension().and_then(|s| s.to_str()).unwrap_or("");
+        target_path.set_extension(format!("{}.enc", ext));
+        
+        println!("Encrypting: {:?} -> {:?}", cli.input, target_path);
+        encrypt_file(&cli.input, &target_path, &cli.password)?;
+    } else {
+        let target_path = cli.output.join(file_name).with_extension("");
+        
+        println!("Decrypting: {:?} -> {:?}", cli.input, target_path);
+        decrypt_file(&cli.input, &target_path, &cli.password)?;
     }
+
+    println!("Operation completed successfully.");
     Ok(())
 }
