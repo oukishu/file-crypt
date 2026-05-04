@@ -1,0 +1,72 @@
+name: Build and Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      project:
+        description: 'Select project to build'
+        required: true
+        default: 'both'
+        type: choice
+        options:
+          - go-crypt
+          - rust-crypt
+          - both
+
+jobs:
+  # --- Golang Build Task ---
+  build-go:
+    name: Build Go Crypt
+    if: ${{ github.event.inputs.project == 'go-crypt' || github.event.inputs.project == 'both' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+
+      - name: Build Go Binary
+        run: |
+          cd go-crypt
+          go mod tidy
+          # CGO_ENABLED=0 ensures a static binary for maximum compatibility
+          # -s -w strips debug information to reduce file size
+          CGO_ENABLED=0 go build -ldflags="-s -w" -o go-crypt-linux-amd64 main.go
+
+      - name: Upload Go Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-crypt-linux-amd64
+          path: go-crypt/go-crypt-linux-amd64
+
+  # --- Rust Build Task ---
+  build-rust:
+    name: Build Rust Crypt
+    if: ${{ github.event.inputs.project == 'rust-crypt' || github.event.inputs.project == 'both' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust-crypt -> target
+
+      - name: Build Rust Binary
+        run: |
+          cd rust-crypt
+          cargo build --release
+          cp target/release/rust-crypt ./rust-crypt-linux-amd64
+
+      - name: Upload Rust Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-crypt-linux-amd64
+          path: rust-crypt/rust-crypt-linux-amd64
