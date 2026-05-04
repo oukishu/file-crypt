@@ -13,74 +13,62 @@ on:
           - LINUX
           - MACOS
           - WINDOWS
-      version:
-        description: 'Build Version'
-        required: true
-        default: 'v1.0.0'
 
 jobs:
-  setup:
+  build-linux:
+    name: Build on Linux
+    if: github.event.inputs.platform == 'ALL' || github.event.inputs.platform == 'LINUX'
     runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
-      - id: set-matrix
-        run: |
-          JSON='{
-            "include": [
-              {"os": "linux", "arch": "amd64", "platform": "LINUX"},
-              {"os": "linux", "arch": "arm64", "platform": "LINUX"},
-              {"os": "darwin", "arch": "amd64", "platform": "MACOS"},
-              {"os": "darwin", "arch": "arm64", "platform": "MACOS"},
-              {"os": "windows", "arch": "amd64", "platform": "WINDOWS"},
-              {"os": "windows", "arch": "386", "platform": "WINDOWS"}
-            ]
-          }'
-          
-          CHOICE="${{ github.event.inputs.platform }}"
-          if [ "$CHOICE" == "ALL" ]; then
-            RESULT=$JSON
-          else
-            RESULT=$(echo $JSON | jq -c "{include: [.include[] | select(.platform == \"$CHOICE\")]}")
-          fi
-          
-          echo "matrix=$RESULT" >> $GITHUB_OUTPUT
-
-  build:
-    needs: setup
-    name: Build ${{ matrix.os }}-${{ matrix.arch }}
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
-    
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
         with:
           go-version: '1.21'
-          cache: true
-
-      - name: Build Binary
+      - name: Build
         run: |
-          if [ ! -f go.mod ]; then
-            go mod init file-crypt
-            go get golang.org/x/crypto/pbkdf2
-          fi
           go mod tidy
-          
-          EXT=""
-          if [ "${{ matrix.os }}" = "windows" ]; then EXT=".exe"; fi
-          OUTPUT_NAME="file-crypt-${{ matrix.os }}-${{ matrix.arch }}${EXT}"
-          
-          CGO_ENABLED=0 GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} \
-          go build -ldflags="-s -w" -o $OUTPUT_NAME main.go
-
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
+          CGO_ENABLED=0 GOARCH=amd64 go build -ldflags="-s -w" -o file-crypt-linux-amd64 main.go
+          CGO_ENABLED=0 GOARCH=arm64 go build -ldflags="-s -w" -o file-crypt-linux-arm64 main.go
+      - uses: actions/upload-artifact@v4
         with:
-          name: file-crypt-${{ matrix.os }}-${{ matrix.arch }}
-          path: file-crypt-${{ matrix.os }}-${{ matrix.arch }}*
+          name: linux-binaries
+          path: file-crypt-linux-*
+
+  build-macos:
+    name: Build on macOS
+    if: github.event.inputs.platform == 'ALL' || github.event.inputs.platform == 'MACOS'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+      - name: Build
+        run: |
+          go mod tidy
+          CGO_ENABLED=0 GOARCH=amd64 go build -ldflags="-s -w" -o file-crypt-darwin-amd64 main.go
+          CGO_ENABLED=0 GOARCH=arm64 go build -ldflags="-s -w" -o file-crypt-darwin-arm64 main.go
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-binaries
+          path: file-crypt-darwin-*
+
+  build-windows:
+    name: Build on Windows
+    if: github.event.inputs.platform == 'ALL' || github.event.inputs.platform == 'WINDOWS'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+      - name: Build
+        shell: pwsh
+        run: |
+          go mod tidy
+          $env:CGO_ENABLED="0"; $env:GOARCH="amd64"; go build -ldflags="-s -w" -o file-crypt-windows-amd64.exe main.go
+          $env:CGO_ENABLED="0"; $env:GOARCH="386"; go build -ldflags="-s -w" -o file-crypt-windows-386.exe main.go
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-binaries
+          path: file-crypt-windows-*.exe
