@@ -19,58 +19,52 @@ on:
         default: 'v1.0.0'
 
 jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - id: set-matrix
+        run: |
+          JSON='{
+            "include": [
+              {"os": "linux", "arch": "amd64", "platform": "LINUX"},
+              {"os": "linux", "arch": "arm64", "platform": "LINUX"},
+              {"os": "darwin", "arch": "amd64", "platform": "MACOS"},
+              {"os": "darwin", "arch": "arm64", "platform": "MACOS"},
+              {"os": "windows", "arch": "amd64", "platform": "WINDOWS"},
+              {"os": "windows", "arch": "386", "platform": "WINDOWS"}
+            ]
+          }'
+          
+          CHOICE="${{ github.event.inputs.platform }}"
+          if [ "$CHOICE" == "ALL" ]; then
+            RESULT=$JSON
+          else
+            RESULT=$(echo $JSON | jq -c "{include: [.include[] | select(.platform == \"$CHOICE\")]}")
+          fi
+          
+          echo "matrix=$RESULT" >> $GITHUB_OUTPUT
+
   build:
+    needs: setup
     name: Build ${{ matrix.os }}-${{ matrix.arch }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          # Linux
-          - os: linux
-            arch: amd64
-            platform: LINUX
-          - os: linux
-            arch: arm64
-            platform: LINUX
-          # macOS
-          - os: darwin
-            arch: amd64
-            platform: MACOS
-          - os: darwin
-            arch: arm64
-            platform: MACOS
-          # Windows
-          - os: windows
-            arch: amd64
-            platform: WINDOWS
-          - os: windows
-            arch: "386"
-            platform: WINDOWS
-
+      matrix: ${{ fromJson(needs.setup.outputs.matrix) }}
+    
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # This step checks if the current matrix row matches the user selection
-      - name: Should Run Check
-        id: check
-        run: |
-          if [[ "${{ github.event.inputs.platform }}" == "ALL" || "${{ github.event.inputs.platform }}" == "${{ matrix.platform }}" ]]; then
-            echo "run=true" >> $GITHUB_OUTPUT
-          else
-            echo "run=false" >> $GITHUB_OUTPUT
-          fi
-
       - name: Set up Go
-        if: steps.check.outputs.run == 'true'
         uses: actions/setup-go@v5
         with:
           go-version: '1.21'
           cache: true
 
       - name: Build Binary
-        if: steps.check.outputs.run == 'true'
         run: |
           if [ ! -f go.mod ]; then
             go mod init file-crypt
@@ -86,7 +80,6 @@ jobs:
           go build -ldflags="-s -w" -o $OUTPUT_NAME main.go
 
       - name: Upload Artifact
-        if: steps.check.outputs.run == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: file-crypt-${{ matrix.os }}-${{ matrix.arch }}
