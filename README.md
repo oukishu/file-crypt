@@ -2,14 +2,14 @@
 file-crypt is a high-performance, cross-platform streaming file encryption tool built with Go. It utilizes the AES-256-GCM encryption algorithm and PBKDF2 for key derivation, ensuring both data security and integrity verification.         
 
 ## Key Features
-* Streaming Process: Uses 64KB chunk-based encryption, supporting ultra-large files (GB/TB range) while maintaining a consistently low memory footprint (approx. 10MB).  
+ * Streaming Process: Uses 64KB chunk-based encryption, supporting ultra-large files (GB/TB range) while maintaining a consistently low memory footprint (approx. 10MB).  
 
-* Cross-Platform Support: Supports Windows (x86/x64), Linux (amd64/arm64), and macOS (Intel/Apple Silicon).  
+ * Cross-Platform Support: Supports Windows (x86/x64), Linux (amd64/arm64), and macOS (Intel/Apple Silicon).  
 
-* High Security:
- * Algorithm: AES-256-GCM (Authenticated Encryption).  
- * Key Derivation: PBKDF2-SHA256 with 100,000 iterations.  
- * Integrity Check: Decryption will fail immediately if the file has been tampered with or the wrong password is provided.  
+ * High Security:
+   * Algorithm: AES-256-GCM (Authenticated Encryption).  
+   * Key Derivation: PBKDF2-SHA256 with 100,000 iterations.  
+   * Integrity Check: Decryption will fail immediately if the file has been tampered with or the wrong password is provided.  
 
 Single Binary: No external dependencies; simply download and run.
 
