@@ -15,19 +15,19 @@ Single Binary: No external dependencies; simply download and run.
 
 ## Command Line Usage
 The program supports four main parameters:  
-    -m: Mode. Use enc for encryption and dec for decryption.  
-    -p: Password. A strong password used for the operation.  
-    -i: Input. The path to the file you want to process.  
-    -o: Output. The directory where the processed file will be saved.
+ * -m: Mode. Use enc for encryption and dec for decryption.  
+ * -p: Password. A strong password used for the operation.  
+ * -i: Input. The path to the file you want to process.  
+ * -o: Output. The directory where the processed file will be saved.
 
-1. Encrypt a File
+1. Encrypt a File            
 To encrypt my_data.zip and save it to the ./encrypted folder:
 ```sh
 ./file-crypt -m enc -p "your-strong-password" -i "my_data.zip" -o "./encrypted"
 ```
 Result: A file named `my_data.zip.enc` will be generated in the `./encrypted` directory.
 
-2. Decrypt a File
+2. Decrypt a File            
 To restore an encrypted file to the ./restored folder:
 ```sh
 ./file-crypt -m dec -p "your-strong-password" -i "./encrypted/my_data.zip.enc" -o "./restored"
