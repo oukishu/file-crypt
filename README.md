@@ -19,6 +19,7 @@ The program supports four main parameters:
  * `-p`: Password. A strong password used for the operation.  
  * `-i`: Input. The path to the file you want to process.  
  * `-o`: Output. The directory where the processed file will be saved.
+ * `-compat`: Compatibility. Enables `Web Mode`.
 
 1. Encrypt a File            
 To encrypt `my_data.zip` and save it to the `./encrypted` folder:
