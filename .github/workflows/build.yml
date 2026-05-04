@@ -29,10 +29,16 @@ jobs:
           go mod tidy
           CGO_ENABLED=0 GOARCH=amd64 go build -ldflags="-s -w" -o file-crypt-linux-amd64 main.go
           CGO_ENABLED=0 GOARCH=arm64 go build -ldflags="-s -w" -o file-crypt-linux-arm64 main.go
+      - name: Compress Individually (Linux)
+        run: |
+          tar -czvf file-crypt-linux-amd64.tar.gz file-crypt-linux-amd64
+          tar -czvf file-crypt-linux-arm64.tar.gz file-crypt-linux-arm64
       - uses: actions/upload-artifact@v4
         with:
           name: linux-binaries
-          path: file-crypt-linux-*
+          path: |
+            file-crypt-linux-amd64.tar.gz
+            file-crypt-linux-arm64.tar.gz
 
   build-macos:
     name: Build on macOS
@@ -48,10 +54,20 @@ jobs:
           go mod tidy
           CGO_ENABLED=0 GOARCH=amd64 go build -ldflags="-s -w" -o file-crypt-darwin-amd64 main.go
           CGO_ENABLED=0 GOARCH=arm64 go build -ldflags="-s -w" -o file-crypt-darwin-arm64 main.go
+      - name: Compress Individually (macOS)
+        run: |
+          sudo chmod +x ./file-crypt-darwin-amd64
+          sudo chmod +x ./file-crypt-darwin-arm64
+          sudo codesign --force --deep -s - ./file-crypt-darwin-amd64
+          sudo codesign --force --deep -s - ./file-crypt-darwin-arm64
+          zip file-crypt-darwin-amd64.zip file-crypt-darwin-amd64
+          zip file-crypt-darwin-arm64.zip file-crypt-darwin-arm64
       - uses: actions/upload-artifact@v4
         with:
           name: macos-binaries
-          path: file-crypt-darwin-*
+          path: |
+            file-crypt-darwin-amd64.zip
+            file-crypt-darwin-arm64.zip
 
   build-windows:
     name: Build on Windows
@@ -68,7 +84,14 @@ jobs:
           go mod tidy
           $env:CGO_ENABLED="0"; $env:GOARCH="amd64"; go build -ldflags="-s -w" -o file-crypt-windows-amd64.exe main.go
           $env:CGO_ENABLED="0"; $env:GOARCH="386"; go build -ldflags="-s -w" -o file-crypt-windows-386.exe main.go
+      - name: Compress Individually (Windows)
+        shell: pwsh
+        run: |
+          Compress-Archive -Path file-crypt-windows-amd64.exe -DestinationPath file-crypt-windows-amd64.zip
+          Compress-Archive -Path file-crypt-windows-386.exe -DestinationPath file-crypt-windows-386.zip
       - uses: actions/upload-artifact@v4
         with:
           name: windows-binaries
-          path: file-crypt-windows-*.exe
+          path: |
+            file-crypt-windows-amd64.zip
+            file-crypt-windows-386.zip
