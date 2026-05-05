@@ -13,6 +13,20 @@ const (
 	Iterations      = 100000
 )
 
+func Encrypt(src, dst, password string, compat bool) error {
+	if compat {
+		return EncryptCompat(src, dst, password)
+	}
+	return EncryptStandard(src, dst, password)
+}
+
+func Decrypt(src, dst, password string, compat bool) error {
+	if compat {
+		return DecryptCompat(src, dst, password)
+	}
+	return DecryptStandard(src, dst, password)
+}
+
 func DeriveKey(password string, salt []byte) []byte {
 	return pbkdf2.Key([]byte(password), salt, Iterations, 32, sha256.New)
 }

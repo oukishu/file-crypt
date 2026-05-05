@@ -29,17 +29,9 @@ func main() {
 		_ = os.MkdirAll(filepath.Dir(outPath), 0755)
 
 		if *mode == "enc" {
-			target := outPath + ".enc"
-			if *compat {
-				return crypto.EncryptCompat(path, target, *pass)
-			}
-			return crypto.EncryptStandard(path, target, *pass)
+			return crypto.Encrypt(path, outPath+".enc", *pass, *compat)
 		} else {
-			target := strings.TrimSuffix(outPath, ".enc")
-			if *compat {
-				return crypto.DecryptCompat(path, target, *pass)
-			}
-			return crypto.DecryptStandard(path, target, *pass)
+			return crypto.Decrypt(path, strings.TrimSuffix(outPath, ".enc"), *pass, *compat)
 		}
 	})
 }
